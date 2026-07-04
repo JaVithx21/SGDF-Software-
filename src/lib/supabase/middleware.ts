@@ -9,7 +9,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 export const updateSession = async (request: NextRequest) => {
     // 1. Generar nonce para CSP (OWASP A05) ANTES de procesar la respuesta
     const isDev = process.env.NODE_ENV === 'development';
-    const nonce = isDev ? '' : Buffer.from(crypto.randomUUID()).toString('base64');
+    const nonce = isDev ? '' : btoa(crypto.randomUUID());
 
     // 2. Pasar el nonce en los headers de la request para que Next.js lo lea
     const requestHeaders = new Headers(request.headers);
