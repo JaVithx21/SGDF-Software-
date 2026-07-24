@@ -53,17 +53,14 @@ export const updateSession = async (request: NextRequest) => {
     } = await supabase.auth.getUser();
 
     // Rutas públicas que no requieren autenticación
-    const publicRoutes = [AUTH_ROUTES.login, '/auth/callback', '/recover', '/update-password'];
+    // Incluye '/' para evitar bucle de redirección (page.tsx maneja esa ruta)
+    const publicRoutes = [AUTH_ROUTES.login, '/auth/callback', '/recover', '/update-password', '/'];
     const isPublicRoute = publicRoutes.some((route) =>
-        request.nextUrl.pathname.startsWith(route)
+        route === '/'
+            ? request.nextUrl.pathname === '/'
+            : request.nextUrl.pathname.startsWith(route)
     );
 
-    // ─── Redirección inteligente de la ruta raíz (/) ────────────────────
-    if (request.nextUrl.pathname === '/') {
-        const url = request.nextUrl.clone();
-        url.pathname = user ? AUTH_ROUTES.dashboard : AUTH_ROUTES.login;
-        return NextResponse.redirect(url);
-    }
 
     // Si no hay usuario autenticado y la ruta no es pública, redirigir a /login
     if (!user && !isPublicRoute) {
@@ -72,28 +69,55 @@ export const updateSession = async (request: NextRequest) => {
         return NextResponse.redirect(url);
     }
 
-    // Si hay usuario autenticado y está en /login, redirigir a /dashboard
-    if (user && request.nextUrl.pathname.startsWith(AUTH_ROUTES.login)) {
-        const url = request.nextUrl.clone();
-        url.pathname = AUTH_ROUTES.dashboard;
-        return NextResponse.redirect(url);
-    }
-
     // --- Protección de rutas por rol (Zero Trust: fail-closed) ---
     if (user) {
-        const { data: perfil } = await supabase
+        let { data: perfil } = await supabase
             .from('usuarios')
             .select('rol')
             .eq('id', user.id)
             .single();
 
+        if (!perfil && user.email) {
+            const { data: perfilEmail } = await supabase
+                .from('usuarios')
+                .select('rol')
+                .eq('email', user.email)
+                .single();
+            if (perfilEmail) perfil = perfilEmail;
+        }
+
         if (!perfil?.rol) {
+            // Si el usuario ya está en /login, dejarlo ahí sin redirigir (rompe el bucle)
+            if (request.nextUrl.pathname.startsWith(AUTH_ROUTES.login)) {
+                // Cerrar sesión para que no vuelva a entrar al bucle
+                await supabase.auth.signOut();
+
+                // Limpiar cookies de sesión de Supabase en la respuesta
+                const response = NextResponse.next({
+                    request: { headers: requestHeaders },
+                });
+                request.cookies.getAll().forEach((cookie) => {
+                    if (cookie.name.startsWith('sb-')) {
+                        response.cookies.delete(cookie.name);
+                    }
+                });
+                return response;
+            }
+
+            // Si está en otra ruta, redirigir a /login con el mensaje de error
             const url = request.nextUrl.clone();
             url.pathname = AUTH_ROUTES.login;
             url.searchParams.set(
                 'error_description',
                 'Tu cuenta no tiene un perfil asignado. Contacta al administrador.'
             );
+            return NextResponse.redirect(url);
+        }
+
+        // Si tiene perfil válido y está en /login, redirigir a /dashboard
+        if (request.nextUrl.pathname.startsWith(AUTH_ROUTES.login)) {
+            const url = request.nextUrl.clone();
+            url.pathname = AUTH_ROUTES.dashboard;
             return NextResponse.redirect(url);
         }
 

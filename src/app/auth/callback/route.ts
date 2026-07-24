@@ -54,23 +54,30 @@ export async function GET(request: Request) {
                 return NextResponse.redirect(`${origin}${next}`);
             }
 
-            // OWASP A01: Validar x-forwarded-host contra whitelist para prevenir open redirect
+            // En producción (Vercel): construir la URL correcta usando x-forwarded-host
+            // para evitar que 'origin' devuelva http:// en lugar de https://
+            const forwardedHost = request.headers.get('x-forwarded-host');
+            const forwardedProto = request.headers.get('x-forwarded-proto') ?? 'https';
+
             const ALLOWED_HOSTS = (process.env.ALLOWED_REDIRECT_HOSTS ?? '')
                 .split(',')
                 .map(h => h.trim())
                 .filter(Boolean);
 
-            const forwardedHost = request.headers.get('x-forwarded-host');
-
+            // Usar forwardedHost si está en la whitelist, si no usar el host del origin
             if (forwardedHost && ALLOWED_HOSTS.includes(forwardedHost)) {
-                return NextResponse.redirect(`https://${forwardedHost}${next}`);
+                return NextResponse.redirect(`${forwardedProto}://${forwardedHost}${next}`);
             }
 
-            // Fallback seguro: usar origin de la propia request
-            return NextResponse.redirect(`${origin}${next}`);
+            // Fallback: reconstruir URL con proto correcto para evitar http:// en Vercel
+            const host = forwardedHost || new URL(request.url).host;
+            const safeOrigin = `${forwardedProto}://${host}`;
+            return NextResponse.redirect(`${safeOrigin}${next}`);
         }
 
+
         // Si el exchange falló, redirigir con error
+        console.error('[Auth Callback Error] exchangeCodeForSession failed:', exchangeError);
         const loginUrl = new URL('/login', origin);
         loginUrl.searchParams.set(
             'error_description',

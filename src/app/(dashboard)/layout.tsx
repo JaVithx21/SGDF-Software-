@@ -21,11 +21,20 @@ export default async function DashboardLayout({
     }
 
     // Obtener perfil del usuario (nombre + rol)
-    const { data: perfil } = await supabase
+    let { data: perfil } = await supabase
         .from('usuarios')
         .select('nombre, rol')
         .eq('id', user.id)
         .single();
+
+    if (!perfil && user.email) {
+        const { data: perfilEmail } = await supabase
+            .from('usuarios')
+            .select('nombre, rol')
+            .eq('email', user.email)
+            .single();
+        if (perfilEmail) perfil = perfilEmail;
+    }
 
     // OWASP A01: Fail-closed — si no hay perfil válido, denegar acceso
     if (!perfil?.rol) {
