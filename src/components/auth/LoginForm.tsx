@@ -56,14 +56,9 @@ export function LoginForm() {
         formData.append('password', password);
         formData.append('rememberMe', String(rememberMe));
 
-        try {
-            const result = await login(formData);
-            if (result?.error) {
-                setError(result.error);
-            }
-        } catch {
-            // En redirects de Server Actions, Next.js lanza una señal interna.
-        } finally {
+        const result = await login(formData);
+        if (result?.error) {
+            setError(result.error);
             setIsLoading(false);
         }
     };
