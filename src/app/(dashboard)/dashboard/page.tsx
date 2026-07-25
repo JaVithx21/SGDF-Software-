@@ -46,7 +46,7 @@ function getEstadoBadge(estado: string) {
 // Data REAL desde Supabase según el período
 async function getRealSalesData(supabase: SupabaseClient, period: TimeFilterType) {
     const now = new Date();
-    
+
     if (period === 'day') {
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfToday = new Date(startOfToday);
@@ -72,7 +72,7 @@ async function getRealSalesData(supabase: SupabaseClient, period: TimeFilterType
         // Retornamos las horas laborales (08:00 a 20:00) para un gráfico más limpio
         return hourlyData.filter((_, i) => i >= 8 && i <= 20);
     }
-    
+
     if (period === 'week') {
         const day = now.getDay() || 7; // Lunes = 1, Domingo = 7
         const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
@@ -138,14 +138,25 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
     // Obtener perfil del usuario
     const { data: { user } } = await supabase.auth.getUser();
-    const { data: perfil } = await supabase
+    let { data: perfil } = await supabase
         .from('usuarios')
         .select('nombre, rol')
         .eq('id', user!.id)
         .single();
 
+    if (!perfil && user?.email) {
+        const { data: perfilEmail } = await supabase
+            .from('usuarios')
+            .select('nombre, rol')
+            .eq('email', user.email)
+            .single();
+        if (perfilEmail) perfil = perfilEmail;
+    }
+
     const userRole = perfil?.rol;
     const isManager = userRole === 'admin' || userRole === 'gerente';
+
+    const userName = perfil?.nombre || user?.user_metadata?.full_name || user?.email || 'Usuario';
 
     // --- Configuración de fechas para hoy ---
     const startOfToday = new Date();
@@ -179,7 +190,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             .from('detalle_pedidos')
             .select('cantidad, precio_unitario, costo_unitario')
             .in('pedido_id', pedidoIds);
-            
+
         utilidadHoy = (detallesHoy ?? []).reduce((acc, det) => {
             const gananciaUnitaria = Number(det.precio_unitario) - Number(det.costo_unitario);
             return acc + (gananciaUnitaria * Number(det.cantidad));
@@ -202,7 +213,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         .from('pedidos')
         .select('*', { count: 'exact', head: true })
         .eq('estado', 'pendiente');
-    
+
     const numPedidosPendientes = numPedidosPendientesRaw ?? 0;
     const pedidosPendientesExport = String(numPedidosPendientes);
 
@@ -234,7 +245,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 <div>
                     <h2 className="text-3xl font-extrabold text-slate-900">Panel de Control</h2>
                     <p className="text-slate-500 mt-1">
-                        Bienvenido, <span className="font-semibold text-slate-700">{perfil?.nombre || 'Usuario'}</span>. Aquí tienes el resumen del día.
+                        Bienvenido, <span className="font-semibold text-slate-700">{userName}</span>. Aquí tienes el resumen del día.
                     </p>
                 </div>
                 <div className="flex items-center gap-4">

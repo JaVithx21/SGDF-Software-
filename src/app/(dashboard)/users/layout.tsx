@@ -1,4 +1,4 @@
-﻿import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { UserRole } from '@/constants/roles';
@@ -26,11 +26,20 @@ export default async function UsersLayout({
     }
 
     // 2. Verificar autorización (rol admin)
-    const { data: perfil } = await supabase
+    let { data: perfil } = await supabase
         .from('usuarios')
         .select('rol')
         .eq('id', user.id)
         .single();
+
+    if (!perfil && user.email) {
+        const { data: perfilEmail } = await supabase
+            .from('usuarios')
+            .select('rol')
+            .eq('email', user.email)
+            .single();
+        if (perfilEmail) perfil = perfilEmail;
+    }
 
     const userRole = (perfil?.rol as UserRole) ?? null;
 

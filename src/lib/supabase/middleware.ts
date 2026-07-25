@@ -104,21 +104,14 @@ export const updateSession = async (request: NextRequest) => {
                 return response;
             }
 
-            // Si está en otra ruta, cerrar sesión y redirigir a /login con el mensaje de error
-            await supabase.auth.signOut();
+            // Si está en otra ruta, redirigir a /login con el mensaje de error
             const url = request.nextUrl.clone();
             url.pathname = AUTH_ROUTES.login;
             url.searchParams.set(
                 'error_description',
                 'Tu cuenta no tiene un perfil asignado. Contacta al administrador.'
             );
-            const response = NextResponse.redirect(url);
-            request.cookies.getAll().forEach((cookie) => {
-                if (cookie.name.startsWith('sb-')) {
-                    response.cookies.delete(cookie.name);
-                }
-            });
-            return response;
+            return NextResponse.redirect(url);
         }
 
         // Si tiene perfil válido y está en /login, redirigir a /dashboard

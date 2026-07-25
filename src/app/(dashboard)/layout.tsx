@@ -41,7 +41,7 @@ export default async function DashboardLayout({
         redirect('/login?error_description=Tu+cuenta+no+tiene+un+perfil+asignado.+Contacta+al+administrador.');
     }
 
-    const userName = perfil.nombre || user.email || 'Usuario';
+    const userName = perfil?.nombre || user?.user_metadata?.full_name || user.email || 'Usuario';
     const userRole = perfil.rol as UserRole;
 
     return (

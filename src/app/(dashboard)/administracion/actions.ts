@@ -1,6 +1,7 @@
-﻿'use server';
+'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/security/auth-guard';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -144,8 +145,7 @@ export async function cambiarRolUsuario(
         return { success: false, error: 'No puede cambiar su propio rol de administrador.' };
     }
 
-    const cookieStore = await cookies();
-    const supabase = createClient(cookieStore);
+    const supabase = createAdminClient();
 
     const { error } = await supabase
         .from('usuarios')
@@ -162,8 +162,7 @@ export async function crearUsuario(data: { nombre: string; email: string; rol: R
     const { error: authError } = await requireAuth('admin');
     if (authError) return { success: false, error: authError };
 
-    const cookieStore = await cookies();
-    const supabase = createClient(cookieStore);
+    const supabase = createAdminClient();
 
     const { error } = await supabase
         .from('usuarios')
@@ -188,8 +187,7 @@ export async function actualizarUsuario(id: string, data: { nombre: string; emai
     const { error: authError } = await requireAuth('admin');
     if (authError) return { success: false, error: authError };
 
-    const cookieStore = await cookies();
-    const supabase = createClient(cookieStore);
+    const supabase = createAdminClient();
 
     const { error } = await supabase
         .from('usuarios')
@@ -219,8 +217,7 @@ export async function eliminarUsuario(id: string): Promise<ActionResult> {
         return { success: false, error: 'No puede eliminar su propio usuario administrador.' };
     }
 
-    const cookieStore = await cookies();
-    const supabase = createClient(cookieStore);
+    const supabase = createAdminClient();
 
     const { error } = await supabase
         .from('usuarios')
