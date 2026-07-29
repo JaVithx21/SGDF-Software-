@@ -165,23 +165,48 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     endOfToday.setDate(endOfToday.getDate() + 1);
     const fechaArchivo = formatDateDDMMYYYY(startOfToday);
 
-    // --- KPI 1: Ingresos Totales (Métrica Diaria - Pagos recibidos hoy) ---
-    const { data: pagosHoy } = await supabase
-        .from('pagos')
-        .select('monto')
-        .gte('created_at', startOfToday.toISOString())
-        .lt('created_at', endOfToday.toISOString());
+    // --- EJECUTAR TODAS LAS CONSULTAS EN PARALELO PARA OPTIMIZAR VELOCIDAD ---
+    const [
+        pagosHoyRes,
+        pedidosHoyRes,
+        pedidosConSaldoRes,
+        numPedidosPendientesRes,
+        alertasStockRes,
+        ultimosPedidosRes,
+        chartData
+    ] = await Promise.all([
+        // KPI 1: Ingresos Totales
+        supabase.from('pagos').select('monto').gte('created_at', startOfToday.toISOString()).lt('created_at', endOfToday.toISOString()),
+        
+        // KPI 1.5 (Paso 1): Pedidos Hoy
+        supabase.from('pedidos').select('id').gte('created_at', startOfToday.toISOString()).lt('created_at', endOfToday.toISOString()).neq('estado', 'anulado'),
+        
+        // KPI 2: Cuentas por Cobrar
+        supabase.from('pedidos').select('saldo').gt('saldo', 0).neq('estado', 'anulado'),
+        
+        // KPI 3: Pedidos Pendientes
+        supabase.from('pedidos').select('*', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+        
+        // KPI 4: Alertas de Stock
+        supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, categorias(nombre)').eq('activo', true),
+        
+        // Últimos Pedidos
+        supabase.from('pedidos').select('id, estado, total, saldo, created_at, clientes(razon_social)').order('created_at', { ascending: false }).limit(5),
+        
+        // Gráfico
+        getRealSalesData(supabase, period)
+    ]);
+
+    // Extraer data
+    const pagosHoy = pagosHoyRes.data;
+    const pedidosHoy = pedidosHoyRes.data;
+    const pedidosConSaldo = pedidosConSaldoRes.data;
+    const numPedidosPendientesRaw = numPedidosPendientesRes.count;
+    const alertasStock = alertasStockRes.data;
+    const ultimosPedidos = ultimosPedidosRes.data;
 
     const ingresosTotales = pagosHoy?.reduce((acc, p) => acc + Number(p.monto), 0) ?? 0;
     const ingresosTotalesCLP = formatCLP(ingresosTotales);
-
-    // --- KPI 1.5: Utilidad de Hoy (Métrica Diaria - Ganancia real de pedidos de hoy) ---
-    const { data: pedidosHoy } = await supabase
-        .from('pedidos')
-        .select('id')
-        .gte('created_at', startOfToday.toISOString())
-        .lt('created_at', endOfToday.toISOString())
-        .neq('estado', 'anulado');
 
     let utilidadHoy = 0;
     if (pedidosHoy && pedidosHoy.length > 0) {
@@ -198,45 +223,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     }
     const utilidadHoyCLP = formatCLP(utilidadHoy);
 
-    // --- KPI 2: Cuentas por Cobrar (Métrica Histórica) ---
-    const { data: pedidosConSaldo } = await supabase
-        .from('pedidos')
-        .select('saldo')
-        .gt('saldo', 0)
-        .neq('estado', 'anulado');
-
     const cuentasPorCobrar = pedidosConSaldo?.reduce((acc, p) => acc + Number(p.saldo), 0) ?? 0;
     const cuentasPorCobrarCLP = formatCLP(cuentasPorCobrar);
-
-    // --- KPI 3: Pedidos Pendientes (Estado Actual) ---
-    const { count: numPedidosPendientesRaw } = await supabase
-        .from('pedidos')
-        .select('*', { count: 'exact', head: true })
-        .eq('estado', 'pendiente');
 
     const numPedidosPendientes = numPedidosPendientesRaw ?? 0;
     const pedidosPendientesExport = String(numPedidosPendientes);
 
-    // --- KPI 4: Alertas de Stock (Estado Actual) ---
-    const { data: alertasStock } = await supabase
-        .from('productos')
-        .select('id, nombre, stock_actual, stock_minimo, categorias(nombre)')
-        .eq('activo', true);
-
-    // Filtrar en el servidor: productos donde stock_actual <= stock_minimo
     const stockBajo = alertasStock?.filter(
         (p) => Number(p.stock_actual) <= Number(p.stock_minimo)
     ) ?? [];
-
-    // --- Últimos Pedidos ---
-    const { data: ultimosPedidos } = await supabase
-        .from('pedidos')
-        .select('id, estado, total, saldo, created_at, clientes(razon_social)')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-    // --- Data Real del Gráfico ---
-    const chartData = await getRealSalesData(supabase, period);
 
     return (
         <div className="space-y-8">
