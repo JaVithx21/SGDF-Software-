@@ -152,14 +152,12 @@ export const updateSession = async (request: NextRequest) => {
         "base-uri 'self'",
         "form-action 'self' https://accounts.google.com",
         "frame-ancestors 'none'",
-        "upgrade-insecure-requests",
     ].join('; ');
 
     supabaseResponse.headers.set('Content-Security-Policy', cspHeader);
     supabaseResponse.headers.set('X-Frame-Options', 'DENY');
     supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff');
     supabaseResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-    supabaseResponse.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     supabaseResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
     return supabaseResponse;
